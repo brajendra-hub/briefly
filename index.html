@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Briefly</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f2f5f4">
+<style>
+:root{--bg:#f2f5f4;--fg:#10201c;--mut:#5d6f69;--card:#fff;--bd:#d9e2df;--ac:#0e6b5c;--acf:#fff;--err:#b3261e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1513;--fg:#e6efec;--mut:#8da39c;--card:#15201d;--bd:#24332f;--ac:#4cc3ad;--acf:#05211b;--err:#ff8a80}}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:620px;margin:0 auto;padding:16px 16px 40px}
+h1{font-size:22px;margin:4px 0 14px;letter-spacing:-.01em}
+nav{display:flex;gap:6px;margin-bottom:16px}
+nav button{flex:1;padding:9px 0;border:1px solid var(--bd);background:transparent;color:var(--mut);border-radius:10px;font:inherit;font-size:14px}
+nav button.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+input[type=text],input[type=password],input:not([type]){width:100%;padding:13px;border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:12px;font:inherit}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.file{display:block;margin:10px 0;padding:13px;border:1px dashed var(--bd);border-radius:12px;color:var(--mut);font-size:14px;text-align:center;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file.has{color:var(--fg);border-style:solid}
+.seg{display:flex;gap:6px;margin:10px 0 14px}
+.seg button{flex:1;padding:8px 0;border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:10px;font:inherit;font-size:14px}
+.seg button.on{border-color:var(--ac);color:var(--ac);font-weight:600}
+.btn{width:100%;padding:14px;border:0;border-radius:12px;background:var(--ac);color:var(--acf);font:inherit;font-weight:600}
+.btn:disabled{opacity:.6}
+.ghost{flex:1;padding:11px 0;border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:10px;font:inherit;font-size:14px}
+#msg{margin:12px 0;font-size:14px;color:var(--mut)}#msg.e{color:var(--err)}
+#out{margin-top:18px;padding:18px;background:var(--card);border:1px solid var(--bd);border-radius:14px}
+#body{font-family:Charter,Georgia,serif;line-height:1.6}
+#body h1{font:700 21px/1.25 Charter,Georgia,serif;margin:0 0 10px}
+#body h2{font:600 16px system-ui,sans-serif;margin:18px 0 4px;color:var(--ac)}
+#body p{margin:6px 0}#body ul{padding-left:20px;margin:6px 0}#body li{margin:4px 0}
+.row{display:flex;gap:6px;margin-top:18px}
+.item{padding:14px;background:var(--card);border:1px solid var(--bd);border-radius:12px;margin-bottom:8px}
+.item b{display:block;cursor:pointer}.item small{color:var(--mut)}
+.item .row{margin-top:10px}
+.empty{color:var(--mut);text-align:center;padding:40px 0}
+label.l{display:block;font-size:13px;color:var(--mut);margin:14px 0 4px}
+.note{font-size:13px;color:var(--mut);margin-top:10px}
+</style></head><body><main>
+<h1>Briefly</h1>
+<nav><button data-t="new" class="on">Summarize</button><button data-t="saved">Saved <span id="cnt"></span></button><button data-t="set">Settings</button></nav>
+
+<section id="new">
+ <input id="url" placeholder="Paste a YouTube link" autocomplete="off" inputmode="url">
+ <label class="file" id="fl"><input type="file" id="file" accept="application/pdf,video/*,audio/*" hidden><span id="fname">Or choose a PDF or video file</span></label>
+ <div class="seg" id="len"><button data-v="brief">Brief</button><button data-v="standard" class="on">Standard</button><button data-v="detailed">Detailed</button></div>
+ <button class="btn" id="go">Summarize</button>
+ <div id="msg" role="status"></div>
+ <article id="out" hidden>
+  <div id="body"></div>
+  <div class="row"><button class="ghost" id="save">Save</button><button class="ghost" id="pdf">Export PDF</button><button class="ghost" id="copy">Copy</button></div>
+ </article>
+</section>
+
+<section id="saved" hidden><div id="list"></div></section>
+
+<section id="set" hidden>
+ <label class="l" for="key">Gemini API key</label>
+ <input type="password" id="key" placeholder="Paste key from aistudio.google.com" autocomplete="off">
+ <label class="l" for="model">Model</label>
+ <input id="model" autocomplete="off">
+ <button class="btn" id="ss" style="margin-top:16px">Save settings</button>
+ <p class="note">Your key and summaries stay on this device. Requests go straight to Google’s Gemini API.</p>
+ <p class="note">Instagram doesn’t allow automatic access to reels. Save the reel to your phone, then choose the video file on the Summarize tab.</p>
+</section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+const $=s=>document.querySelector(s),LS=localStorage;
+let lib=[],cur=null,len='standard',file=null;
+try{lib=JSON.parse(LS.bf_lib||'[]')}catch(e){}
+const store=()=>{try{LS.bf_lib=JSON.stringify(lib)}catch(e){msg('Storage is full. Delete some saved summaries.',1)}};
+const msg=(t,e)=>{const m=$('#msg');m.textContent=t||'';m.className=e?'e':''};
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const inl=s=>esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+function md(t){let h='',ul=false;for(const l of t.split('\n')){const b=l.match(/^\s*[-*\u2022]\s+(.*)/);if(b){if(!ul){h+='<ul>';ul=true}h+='<li>'+inl(b[1])+'</li>';continue}if(ul){h+='</ul>';ul=false}const m=l.match(/^(#{1,3})\s+(.*)/);if(m){const n=m[1].length;h+=`<h${n}>${inl(m[2])}</h${n}>`}else if(l.trim())h+='<p>'+inl(l)+'</p>'}return h+(ul?'</ul>':'')}
+
+function tab(t){['new','saved','set'].forEach(x=>$('#'+x).hidden=x!=t);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t==t));if(t=='saved')renderList()}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>tab(b.dataset.t));
+document.querySelectorAll('#len button').forEach(b=>b.onclick=()=>{len=b.dataset.v;document.querySelectorAll('#len button').forEach(x=>x.classList.toggle('on',x==b))});
+$('#file').onchange=e=>{file=e.target.files[0]||null;$('#fname').textContent=file?file.name:'Or choose a PDF or video file';$('#fl').classList.toggle('has',!!file);if(file)$('#url').value=''};
+$('#url').oninput=()=>{if($('#url').value&&file){file=null;$('#file').value='';$('#fname').textContent='Or choose a PDF or video file';$('#fl').classList.remove('has')}};
+
+$('#key').value=LS.bf_key||'';$('#model').value=LS.bf_model||'gemini-2.5-flash';
+$('#ss').onclick=()=>{LS.bf_key=$('#key').value.trim();LS.bf_model=$('#model').value.trim()||'gemini-2.5-flash';tab('new');msg('Settings saved.')};
+
+const b64=f=>new Promise((r,j)=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.onerror=j;x.readAsDataURL(f)});
+const words={brief:'about 120 words',standard:'about 300 words',detailed:'about 600 words'};
+
+async function go(){
+ const key=LS.bf_key,u=$('#url').value.trim();msg('');
+ if(!key){tab('set');return msg('Add your Gemini API key first.',1)}
+ let part,src;
+ if(file){
+  if(file.size>18e6)return msg('This file is over 18 MB. Use a smaller or shorter file.',1);
+  part={inline_data:{mime_type:file.type||'application/pdf',data:await b64(file)}};src=file.name;
+ }else if(/instagram\.com/i.test(u)){return msg('Instagram blocks automatic access. Save the reel to your phone and choose the video file above.',1)}
+ else if(/(youtube\.com|youtu\.be)\//i.test(u)){part={file_data:{file_uri:u}};src=u}
+ else return msg('Paste a YouTube link or choose a PDF or video file.',1);
+ const prompt=`Summarize this content, combining all the important information into a concise summary of ${words[len]}. Use markdown in exactly this shape: a first line "# <short descriptive title>", then "## Key points" as bullets, then "## Details" as short paragraphs or bullets covering facts, numbers, names and steps worth keeping, then "## Takeaway" as one sentence. Skip filler, intros and promotions.`;
+ const g=$('#go');g.disabled=true;g.textContent='Summarizing…';$('#out').hidden=true;
+ try{
+  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(LS.bf_model||'gemini-2.5-flash')}:generateContent?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[part,{text:prompt}]}]})});
+  const j=await r.json();
+  if(j.error)throw new Error(j.error.message);
+  const text=(j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('').trim();
+  if(!text)throw new Error('No summary came back. The video may be private or have no usable audio.');
+  const t=(text.match(/^#\s+(.*)/m)||[])[1]||'Summary';
+  cur={id:Date.now(),title:t,source:src,date:new Date().toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}),text};
+  show(cur);
+ }catch(e){msg(e.message,1)}
+ g.disabled=false;g.textContent='Summarize';
+}
+$('#go').onclick=go;
+
+function show(s){cur=s;$('#body').innerHTML=md(s.text);$('#out').hidden=false;$('#save').textContent=lib.some(x=>x.id==s.id)?'Saved':'Save';tab('new');$('#out').scrollIntoView({behavior:'smooth'})}
+$('#save').onclick=()=>{if(!cur||lib.some(x=>x.id==cur.id))return;lib.unshift(cur);store();$('#save').textContent='Saved';count()};
+$('#copy').onclick=async()=>{try{await navigator.clipboard.writeText(cur.text.replace(/\*\*/g,''));msg('Copied.')}catch(e){msg('Copy isn’t available here.',1)}};
+$('#pdf').onclick=()=>makePdf(cur);
+
+function makePdf(s){
+ if(!window.jspdf)return msg('PDF tool didn’t load. Check your connection and try again.',1);
+ const d=new window.jspdf.jsPDF({unit:'pt',format:'a4'}),W=d.internal.pageSize.getWidth(),H=d.internal.pageSize.getHeight(),M=48,mw=W-2*M;let y=M;
+ const clean=t=>t.replace(/\*\*/g,'').replace(/[\u2018\u2019]/g,"'").replace(/[\u201C\u201D]/g,'"').replace(/[\u2013\u2014]/g,'-').replace(/[^\x09\x0A\x20-\xFF]/g,'');
+ const put=(t,sz,bold,ind,gap)=>{d.setFont('helvetica',bold?'bold':'normal');d.setFontSize(sz);for(const ln of d.splitTextToSize(clean(t),mw-ind)){if(y>H-M){d.addPage();y=M}d.text(ln,M+ind,y);y+=sz*1.4}y+=gap};
+ put(s.title,20,1,0,4);d.setTextColor(110);put(s.source+'   '+s.date,9,0,0,14);d.setTextColor(0);
+ let first=true;
+ for(const l of s.text.split('\n')){
+  if(!l.trim())continue;
+  if(first&&/^#\s/.test(l)){first=false;continue}first=false;
+  const h=l.match(/^#{1,3}\s+(.*)/),b=l.match(/^\s*[-*\u2022]\s+(.*)/);
+  if(h){y+=6;put(h[1],13,1,0,3)}else if(b)put('\u2022 '+b[1],11,0,12,3);else put(l,11,0,0,6);
+ }
+ d.save((s.title.replace(/[^\w\- ]+/g,'').trim().slice(0,50)||'summary')+'.pdf');
+}
+
+function count(){$('#cnt').textContent=lib.length?'('+lib.length+')':''}
+function renderList(){
+ const L=$('#list');count();
+ if(!lib.length){L.innerHTML='<p class="empty">No saved summaries yet. Summarize something and tap Save.</p>';return}
+ L.innerHTML=lib.map(s=>`<div class="item" data-id="${s.id}"><b data-a="open">${esc(s.title)}</b><small>${esc(s.date)}</small><div class="row"><button class="ghost" data-a="open">Open</button><button class="ghost" data-a="pdf">PDF</button><button class="ghost" data-a="del">Delete</button></div></div>`).join('');
+}
+$('#list').onclick=e=>{const a=e.target.dataset.a,it=e.target.closest('.item');if(!a||!it)return;const s=lib.find(x=>x.id==it.dataset.id);
+ if(a=='open')show(s);else if(a=='pdf')makePdf(s);else if(a=='del'){lib=lib.filter(x=>x!=s);store();renderList()}};
+count();
+
+// Android share-sheet / shortcut: pick up a shared YouTube link
+const q=new URLSearchParams(location.search),sh=(q.get('url')||q.get('text')||'').match(/https?:\/\/\S+/);
+if(sh){$('#url').value=sh[0]}
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script></body></html>
